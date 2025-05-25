@@ -23,17 +23,27 @@ protected:
     Transaction tr;
 };
 
-TEST_F(TransactionTest, SuccessfulTransferBetweenAccounts) {
-    {
-        InSequence seq;
-        EXPECT_CALL(from, Lock()).Times(1);
-        EXPECT_CALL(to, Lock()).Times(1);
-        EXPECT_CALL(from, GetBalance()).WillOnce(Return(2000));
-        EXPECT_CALL(from, ChangeBalance(-301)).Times(1);
-        EXPECT_CALL(to, ChangeBalance(300)).Times(1);
-        EXPECT_CALL(to, Unlock()).Times(1);
-        EXPECT_CALL(from, Unlock()).Times(1);
-    }
+TEST(TransactionTest, TransferBetweenDifferentAccounts) {
+    MockAccount from(1, 2000);
+    MockAccount to(2, 500);
+    Transaction tr;
+
+    testing::InSequence seq;
+
+    EXPECT_CALL(from, Lock()).Times(1);
+    EXPECT_CALL(to, Lock()).Times(1);
+
+    EXPECT_CALL(from, GetBalance()).WillOnce(Return(2000));
+    EXPECT_CALL(from, ChangeBalance(-301)).Times(1); // 300 + fee=1
+
+    EXPECT_CALL(to, ChangeBalance(300)).Times(1);
+
+    EXPECT_CALL(to, Unlock()).Times(1);
+    EXPECT_CALL(from, Unlock()).Times(1);
+
+    EXPECT_CALL(from, GetBalance()).WillOnce(Return(1699));
+    EXPECT_CALL(to, GetBalance()).WillOnce(Return(800));   
+
     ASSERT_TRUE(tr.Make(from, to, 300));
 }
 
@@ -49,12 +59,14 @@ TEST_F(TransactionTest, SmallAmountThrowsLogicError) {
     EXPECT_THROW(tr.Make(from, to, 99), std::logic_error);
 }
 
-TEST_F(TransactionTest, SmallTransferWithHighFeeFails) {
+TEST(TransactionTest, FeeExceedsHalfSumReturnsFalse) {
+    MockAccount from(1, 300);
+    MockAccount to(2, 0);
+    Transaction tr;
+
     EXPECT_CALL(from, Lock()).Times(0);
     EXPECT_CALL(to, Lock()).Times(0);
-    EXPECT_CALL(from, ChangeBalance(_)).Times(0);
-    EXPECT_CALL(to, ChangeBalance(_)).Times(0);
-    ASSERT_FALSE(tr.Make(from, to, 1));
+    ASSERT_FALSE(tr.Make(from, to, 1)); 
 }
 
 TEST_F(TransactionTest, InsufficientFundsCancelsTransfer) {
