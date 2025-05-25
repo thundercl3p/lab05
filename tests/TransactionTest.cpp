@@ -26,16 +26,15 @@ protected:
 TEST_F(TransactionTest, SuccessfulTransferBetweenAccounts) {
     {
         InSequence seq;
-        EXPECT_CALL(from, Lock());
-        EXPECT_CALL(to, Lock());
+        EXPECT_CALL(from, Lock()).Times(1);
+        EXPECT_CALL(to, Lock()).Times(1);
         EXPECT_CALL(from, GetBalance()).WillOnce(Return(2000));
-        EXPECT_CALL(from, ChangeBalance(-301));
-        EXPECT_CALL(to, ChangeBalance(300));
-        EXPECT_CALL(to, Unlock());
-        EXPECT_CALL(from, Unlock());
+        EXPECT_CALL(from, ChangeBalance(-301)).Times(1);
+        EXPECT_CALL(to, ChangeBalance(300)).Times(1);
+        EXPECT_CALL(to, Unlock()).Times(1);
+        EXPECT_CALL(from, Unlock()).Times(1);
     }
-
-    EXPECT_TRUE(tr.Make(from, to, 300));
+    ASSERT_TRUE(tr.Make(from, to, 300));
 }
 
 TEST_F(TransactionTest, SelfTransferThrowsLogicError) {
@@ -51,7 +50,11 @@ TEST_F(TransactionTest, SmallAmountThrowsLogicError) {
 }
 
 TEST_F(TransactionTest, SmallTransferWithHighFeeFails) {
-    EXPECT_FALSE(tr.Make(from, to, 1));
+    EXPECT_CALL(from, Lock()).Times(0);
+    EXPECT_CALL(to, Lock()).Times(0);
+    EXPECT_CALL(from, ChangeBalance(_)).Times(0);
+    EXPECT_CALL(to, ChangeBalance(_)).Times(0);
+    ASSERT_FALSE(tr.Make(from, to, 1));
 }
 
 TEST_F(TransactionTest, InsufficientFundsCancelsTransfer) {
