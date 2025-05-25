@@ -3,24 +3,15 @@
 #include "Account.h"
 #include "Transaction.h"
 
-using ::testing::_;
-using ::testing::InSequence;
-using ::testing::Return;
+using namespace testing;
 
 class MockAccount : public Account {
 public:
     MockAccount(int id, int balance) : Account(id, balance) {}
     MOCK_METHOD(int, GetBalance, (), (const, override));
-    MOCK_METHOD(void, ChangeBalance, (int), (override));
+    MOCK_METHOD(void, ChangeBalance, (int diff), (override));
     MOCK_METHOD(void, Lock, (), (override));
     MOCK_METHOD(void, Unlock, (), (override));
-};
-
-class TransactionTest : public ::testing::Test {
-protected:
-    MockAccount from{1, 2000};
-    MockAccount to{2, 500};
-    Transaction tr;
 };
 
 TEST(TransactionTest, TransferBetweenDifferentAccounts) {
@@ -47,16 +38,26 @@ TEST(TransactionTest, TransferBetweenDifferentAccounts) {
     ASSERT_TRUE(tr.Make(from, to, 300));
 }
 
-TEST_F(TransactionTest, SelfTransferThrowsLogicError) {
-    EXPECT_THROW(tr.Make(from, from, 200), std::logic_error);
+
+
+TEST(TransactionTest, TransferToSameAccountThrows) {
+    MockAccount acc(1, 100);
+    Transaction tr;
+    ASSERT_THROW(tr.Make(acc, acc, 200), std::logic_error);
 }
 
-TEST_F(TransactionTest, NegativeAmountThrowsInvalidArgument) {
-    EXPECT_THROW(tr.Make(from, to, -50), std::invalid_argument);
+TEST(TransactionTest, NegativeSumThrows) {
+    MockAccount from(1, 200);
+    MockAccount to(2, 100);
+    Transaction tr;
+    ASSERT_THROW(tr.Make(from, to, -50), std::invalid_argument);
 }
 
-TEST_F(TransactionTest, SmallAmountThrowsLogicError) {
-    EXPECT_THROW(tr.Make(from, to, 99), std::logic_error);
+TEST(TransactionTest, SmallSumThrows) {
+    MockAccount from(1, 200);
+    MockAccount to(2, 100);
+    Transaction tr;
+    ASSERT_THROW(tr.Make(from, to, 99), std::logic_error);
 }
 
 TEST(TransactionTest, FeeExceedsHalfSumReturnsFalse) {
@@ -69,25 +70,32 @@ TEST(TransactionTest, FeeExceedsHalfSumReturnsFalse) {
     ASSERT_FALSE(tr.Make(from, to, 1)); 
 }
 
-TEST_F(TransactionTest, InsufficientFundsCancelsTransfer) {
-    EXPECT_CALL(from, GetBalance()).WillOnce(Return(100));
-    
-    InSequence seq;
-    EXPECT_CALL(from, Lock());
-    EXPECT_CALL(to, Lock());
-    EXPECT_CALL(to, Unlock());
-    EXPECT_CALL(from, Unlock());
+TEST(TransactionTest, DebitFailsDueToInsufficientBalance) {
+    MockAccount from(1, 100);
+    MockAccount to(2, 0);
+    Transaction tr;
 
-    EXPECT_FALSE(tr.Make(from, to, 150));
+   
+    EXPECT_CALL(from, Lock()).Times(1);
+    EXPECT_CALL(to, Lock()).Times(1);
+    EXPECT_CALL(to, Unlock()).Times(1);
+    EXPECT_CALL(from, Unlock()).Times(1);
+
+    EXPECT_CALL(from, GetBalance()).WillOnce(Return(100));
+    ASSERT_FALSE(tr.Make(from, to, 150)); 
 }
 
-TEST_F(TransactionTest, UnlockOrderPreservedOnFailure) {
-    InSequence seq;
+TEST(TransactionTest, UnlockOrderIsCorrectOnFailure) {
+    MockAccount from(1, 50);
+    MockAccount to(2, 0);
+    Transaction tr;
+
+    testing::InSequence seq;
     EXPECT_CALL(from, Lock());
     EXPECT_CALL(to, Lock());
     EXPECT_CALL(from, GetBalance()).WillOnce(Return(50));
     EXPECT_CALL(to, Unlock());
     EXPECT_CALL(from, Unlock());
 
-    EXPECT_FALSE(tr.Make(from, to, 100));
+    ASSERT_FALSE(tr.Make(from, to, 100));
 }
