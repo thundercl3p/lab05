@@ -4,45 +4,52 @@ on: [push, pull_request]
 
 jobs:
   build-and-test:
+    name: Build, Test and Report Coverage
     runs-on: ubuntu-22.04
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install dependencies
-      run: |
-        sudo apt-get update -q
-        sudo apt-get install -yq cmake g++ git lcov
+      - name: Checkout code
+        uses: actions/checkout@v3
         
-    - name: Build
-      run: |
-        mkdir -p build && cd build
-        cmake .. -DBUILD_TESTS=ON
-        cmake --build .
-        
-    - name: Run tests
-      run: |
-        cd build
-        ./tests/tests --gtest_output=xml:test_results.xml
-        
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: test-results
-        path: build/test_results.xml
-        
-    - name: Generate coverage
-      if: success()
-      run: |
-        cd build
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '*/tests/*' '/usr/*' '*/include/*' --output-file coverage.info
-        lcov --list coverage.info
-        
-    - name: Upload to Coveralls
-      if: success()
-      uses: coverallsapp/github-action@v2
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: build/coverage.info
+      - name: Setup build environment
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq \
+            cmake \
+            g++ \
+            git \
+            lcov
+          
+      - name: Configure and build
+        run: |
+          mkdir -p build && cd build
+          cmake .. -DBUILD_TESTS=ON
+          cmake --build . --config Release
+          
+      - name: Run unit tests
+        working-directory: ./build
+        run: ./tests/tests
+
+      - name: Generate coverage report
+        working-directory: ./build
+        run: |
+          lcov --ignore-errors mismatch \
+               --capture \
+               --directory . \
+               --output-file coverage.info
+          
+          lcov --remove coverage.info \
+               '*/tests/*' \
+               '/usr/*' \
+               '*/include/*' \
+               --output-file coverage.info
+               
+          lcov --list coverage.info
+          
+      - name: Upload coverage results
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: build/coverage.info
+          flag-name: linux
+          parallel: false
